@@ -299,16 +299,6 @@
     try { await navigator.clipboard.writeText(url) } catch (e) { window.prompt(s('copy'), url) }
     $('copyBtn').textContent = s('copied')
   }
-  state = 'idle'
-  if (!inApp) {
-    // start by itself when the permission is already given; else wait for the tap on the green button
-    let known = false
-    try { known = localStorage.getItem('zf-gps') === '1' } catch (e) {}
-    if (known) startGps()
-    else if (navigator.permissions && navigator.permissions.query)
-      navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') startGps() }).catch(() => {})
-  }
-
   // ---------- language ----------
   $('lang').onclick = () => {
     lang = lang === 'es' ? 'en' : 'es'
@@ -335,5 +325,15 @@
   $('sheetOk').onclick = () => $('sheet').classList.remove('open')
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {})
+  // start the GPS by itself when the permission is already given; else wait for the tap on the green button.
+  // Runs last, after every function render() needs is defined.
+  state = 'idle'
   render()
+  if (!inApp) {
+    let known = false
+    try { known = localStorage.getItem('zf-gps') === '1' } catch (e) {}
+    if (known) startGps()
+    else if (navigator.permissions && navigator.permissions.query)
+      navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') startGps() }).catch(() => {})
+  }
 })()
