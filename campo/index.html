@@ -43,6 +43,12 @@
       #sub { font-size: 19px; margin-top: 6px; line-height: 1.3; }
       #hint { font-size: 16px; margin-top: 8px; color: var(--warn); font-weight: 600; }
       #hint:empty { display: none; }
+      #help { font-size: 17px; line-height: 1.4; margin-top: 10px; }
+      #help:empty { display: none; }
+      #help ol { margin: 6px 0 0; padding-left: 22px; }
+      #help li { margin-bottom: 4px; }
+      #actions { margin-top: 12px; }
+      #actions button[hidden] { display: none; }
       #mapwrap { flex: 1; min-height: 0; margin: 0 16px; position: relative; }
       svg { width: 100%; height: 100%; display: block; touch-action: manipulation; }
       .bnd { fill: none; stroke: #b03a2e; stroke-width: 0.8; stroke-dasharray: 3 2; }
@@ -88,6 +94,11 @@
       <div id="title">…</div>
       <div id="sub"></div>
       <div id="hint"></div>
+      <div id="help"></div>
+      <div class="row" id="actions">
+        <button class="main" id="gpsBtn"></button>
+        <button id="copyBtn"></button>
+      </div>
     </header>
     <div id="mapwrap"><svg id="map" aria-label="Mapa de lotes"></svg></div>
     <footer>

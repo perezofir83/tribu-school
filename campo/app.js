@@ -4,6 +4,19 @@
   const F = window.FIELD
   const T = {
     es: {
+      start: 'Toca el botón verde para ver en qué lote estás.',
+      ask: '¿En qué lote estás?',
+      gpsBtn: 'Mostrar mi ubicación',
+      retry: 'Intentar de nuevo',
+      copy: 'Copiar enlace',
+      copied: 'Enlace copiado',
+      inapp: 'Abre este enlace en Chrome o Safari',
+      inappSub: 'WhatsApp, Instagram y Facebook no dejan usar el GPS aquí.',
+      inappSteps: ['Toca «Copiar enlace».', 'Abre Chrome (Android) o Safari (iPhone).', 'Pega el enlace arriba y ábrelo.'],
+      deniedIos: ['Abre Ajustes → Privacidad y seguridad → Localización. Actívala.', 'En la misma lista, toca «Sitios web de Safari» (o Chrome) → «Al usar la app».', 'Vuelve aquí y toca «Intentar de nuevo».'],
+      deniedAnd: ['Baja la barra de arriba del teléfono y activa «Ubicación».', 'En Chrome, toca el candado o ⓘ junto a la dirección → Permisos → Ubicación → Permitir.', 'Vuelve aquí y toca «Intentar de nuevo».'],
+      timeout: 'El GPS todavía no responde',
+      timeoutSub: 'Activa «Ubicación» en el teléfono, sal al aire libre y toca «Intentar de nuevo».',
       wait: 'Buscando tu ubicación…',
       waitSub: 'Sal al aire libre y espera unos segundos.',
       denied: 'Sin permiso de ubicación',
@@ -38,6 +51,19 @@
       m2: 'm²',
     },
     en: {
+      start: 'Tap the green button to see which lot you are in.',
+      ask: 'Which lot are you in?',
+      gpsBtn: 'Show my location',
+      retry: 'Try again',
+      copy: 'Copy link',
+      copied: 'Link copied',
+      inapp: 'Open this link in Chrome or Safari',
+      inappSub: 'WhatsApp, Instagram and Facebook block the GPS here.',
+      inappSteps: ['Tap “Copy link”.', 'Open Chrome (Android) or Safari (iPhone).', 'Paste the link at the top and open it.'],
+      deniedIos: ['Open Settings → Privacy & Security → Location Services. Turn it on.', 'In the same list, tap “Safari Websites” (or Chrome) → “While Using the App”.', 'Come back here and tap “Try again”.'],
+      deniedAnd: ['Pull down the top bar of the phone and turn on “Location”.', 'In Chrome, tap the lock or ⓘ next to the address → Permissions → Location → Allow.', 'Come back here and tap “Try again”.'],
+      timeout: 'The GPS does not answer yet',
+      timeoutSub: 'Turn on “Location” on the phone, step outside and tap “Try again”.',
       wait: 'Finding your location…',
       waitSub: 'Step outside and wait a few seconds.',
       denied: 'No location permission',
@@ -75,6 +101,7 @@
   let lang = 'es'
   try { lang = localStorage.getItem('zf-lang') || 'es' } catch (e) {}
   const s = (k) => T[lang][k]
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   const fmt = (n) => Math.round(n).toLocaleString('en-US')
 
   // ---------- geometry ----------
@@ -167,10 +194,29 @@
     document.documentElement.lang = lang
     renderSave()
     lotEls.forEach((e) => e.classList.remove('on'))
+    $('help').innerHTML = ''
+    $('gpsBtn').hidden = true
+    $('copyBtn').hidden = true
+    $('copyBtn').textContent = s('copy')
     if (!last) {
-      if (state === 'denied') setText(s('denied'), s('deniedSub'))
-      else if (state === 'nogps') setText(s('nogps'), '')
-      else setText(s('wait'), s('waitSub'))
+      const steps = (k) => `<ol>${s(k).map((x) => `<li>${x}</li>`).join('')}</ol>`
+      if (inApp) {
+        setText(s('inapp'), s('inappSub'))
+        $('help').innerHTML = steps('inappSteps')
+        $('copyBtn').hidden = false
+        $('gpsBtn').hidden = false; $('gpsBtn').textContent = s('gpsBtn')
+      } else if (state === 'denied') {
+        setText(s('denied'), '')
+        $('help').innerHTML = steps(isIOS ? 'deniedIos' : 'deniedAnd')
+        $('gpsBtn').hidden = false; $('gpsBtn').textContent = s('retry')
+      } else if (state === 'timeout') {
+        setText(s('timeout'), s('timeoutSub'))
+        $('gpsBtn').hidden = false; $('gpsBtn').textContent = s('retry')
+      } else if (state === 'nogps') setText(s('nogps'), '')
+      else if (state === 'idle') {
+        setText(s('ask'), s('start'))
+        $('gpsBtn').hidden = false; $('gpsBtn').textContent = s('gpsBtn')
+      } else setText(s('wait'), s('waitSub'))
       return
     }
     const { p, a } = last
@@ -221,17 +267,47 @@
       render()
     })
   }
-  if (!('geolocation' in navigator)) state = 'nogps'
-  else
-    navigator.geolocation.watchPosition(
-      (pos) => {
-        if (demo && last) return
-        last = { p: toLocal(pos.coords.latitude, pos.coords.longitude), a: pos.coords.accuracy }
-        render()
-      },
-      (err) => { state = err.code === 1 ? 'denied' : 'wait'; if (!last) render() },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 30000 },
-    )
+  // In-app browsers (WhatsApp, Instagram, Facebook…) often block location: ask to open in Chrome/Safari.
+  const ua = navigator.userAgent
+  const inApp = /WhatsApp|Instagram|FBAN|FBAV|FB_IAB|Line\/|Telegram|; wv\)/i.test(ua)
+  let watchId = null
+  let gotFix = false
+  function startGps() {
+    if (!('geolocation' in navigator)) { state = 'nogps'; return render() }
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId)
+    state = 'wait'; gotFix = false; render()
+    const ok = (pos) => {
+      gotFix = true
+      try { localStorage.setItem('zf-gps', '1') } catch (e) {}
+      if (demo && last) return
+      last = { p: toLocal(pos.coords.latitude, pos.coords.longitude), a: pos.coords.accuracy }
+      render()
+    }
+    const fail = (err) => {
+      if (gotFix) return
+      state = err.code === 1 ? 'denied' : 'timeout'
+      if (err.code === 1) { try { localStorage.removeItem('zf-gps') } catch (e) {} }
+      render()
+    }
+    // one quick request from the tap (this is what shows the permission question), then keep following
+    navigator.geolocation.getCurrentPosition(ok, (err) => { if (err.code === 1) fail(err) }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 })
+    watchId = navigator.geolocation.watchPosition(ok, fail, { enableHighAccuracy: true, maximumAge: 2000, timeout: 45000 })
+  }
+  $('gpsBtn').onclick = startGps
+  $('copyBtn').onclick = async () => {
+    const url = location.origin + location.pathname
+    try { await navigator.clipboard.writeText(url) } catch (e) { window.prompt(s('copy'), url) }
+    $('copyBtn').textContent = s('copied')
+  }
+  state = 'idle'
+  if (!inApp) {
+    // start by itself when the permission is already given; else wait for the tap on the green button
+    let known = false
+    try { known = localStorage.getItem('zf-gps') === '1' } catch (e) {}
+    if (known) startGps()
+    else if (navigator.permissions && navigator.permissions.query)
+      navigator.permissions.query({ name: 'geolocation' }).then((p) => { if (p.state === 'granted') startGps() }).catch(() => {})
+  }
 
   // ---------- language ----------
   $('lang').onclick = () => {
@@ -243,7 +319,6 @@
   // ---------- save on phone ----------
   let prompt = null
   const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true
-  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); prompt = e; renderSave() })
   window.addEventListener('appinstalled', () => { prompt = null; renderSave() })
   function renderSave() {
