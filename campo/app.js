@@ -29,7 +29,7 @@
       nearLane: 'Cerca del camino privado',
       nearEdge: 'Cerca del límite del terreno',
       lane: 'Estás en el camino privado',
-      laneSub: 'Camino de 3 m que sube a los lotes.',
+      laneSub: 'Camino de 4 m que sube a los lotes.',
       road: 'Estás en el camino de 6 m',
       roadSub: 'Entrada desde V1 hacia la escuela.',
       school: 'Terreno de la escuela',
@@ -76,7 +76,7 @@
       nearLane: 'Near the private lane',
       nearEdge: 'Near the edge of the land',
       lane: 'You are on the private lane',
-      laneSub: '3 m lane that climbs to the lots.',
+      laneSub: '4 m lane that climbs to the lots.',
       road: 'You are on the 6 m road',
       roadSub: 'Entrance from V1 towards the school.',
       school: 'School land',
@@ -133,7 +133,7 @@
     }
     return [x / (3 * a), y / (3 * a)]
   }
-  const onLane = (p) => lineDist(p, F.lane) <= 1.6 || Math.hypot(p[0] - F.turn[0], p[1] - F.turn[1]) <= 5
+  const onLane = (p) => lineDist(p, F.lane) <= F.laneW / 2 + 0.1 || Math.hypot(p[0] - F.turn[0], p[1] - F.turn[1]) <= F.turnR
   const dirWord = (dx, dy) => s('dir')[Math.round(((Math.atan2(dx, dy) * 180) / Math.PI + 360) / 45) % 8]
   const viewWord = (v) => (v >= 0.55 ? s('v_good') : v >= 0.2 ? s('v_part') : s('v_none'))
 
@@ -157,8 +157,9 @@
   const lotEls = F.lots.map((l) => el('polygon', { points: P(l.poly), class: 'lot' }))
   F.contours.forEach((c) => el('polyline', { points: P(c.p), class: 'cont' }))
   F.lots.forEach((l) => el('polygon', { points: P(l.pad), class: 'pad' }))
-  el('polyline', { points: P(F.lane), class: 'lane' })
-  el('circle', { cx: F.turn[0], cy: -F.turn[1], r: 5, class: 'turn' })
+  ;(F.drives || []).forEach((dv) => el('polyline', { points: P(dv), class: 'drive', 'stroke-width': F.driveW }))
+  el('polyline', { points: P(F.lane), class: 'lane', 'stroke-width': F.laneW })
+  el('circle', { cx: F.turn[0], cy: -F.turn[1], r: F.turnR, class: 'turn' })
   el('polygon', { points: P(F.boundary), class: 'bnd' })
   const labels = F.lots.map((l) => {
     const c = centroid(l.poly)
@@ -234,7 +235,7 @@
       if (edgeDist(p, l.poly) < near) {
         let best = null
         F.lots.forEach((o, j) => { if (j !== i) { const d = edgeDist(p, o.poly); if (!best || d < best.d) best = { d, w: `${s('nearLot')} ${o.id}` } } })
-        const dl = lineDist(p, F.lane) - 1.5
+        const dl = lineDist(p, F.lane) - F.laneW / 2
         if (dl < (best ? best.d : Infinity)) best = { d: dl, w: s('nearLane') }
         hint = best && best.d < near + 3 ? best.w : s('nearEdge')
       }
